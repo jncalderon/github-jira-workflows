@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { extractIssueKeys, eventContext, processTickets } = require("../src/jira-workflow.js");
+const { extractIssueKeys, eventContext, processTickets, discordMessageForTransition } = require("../src/jira-workflow.js");
 
 test("detecta múltiples IDs y elimina duplicados", () => {
   assert.deepEqual(extractIssueKeys(["add DEV-12 DEV-455 DEV-12"]), ["DEV-12", "DEV-455"]);
@@ -41,6 +41,39 @@ test("no intenta Done si el estado actual no es Test Ok", async () => {
     assert.deepEqual(results, [{ key: "DEV-12", current: "To Do", changed: false }]);
     assert.equal(calls.length, 1);
     assert.equal(calls[0].options.method, undefined);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test("genera mensajes de Discord en español solo para despliegues", () => {
+  assert.equal(discordMessageForTransition("DEV-12", "Waiting Test"), "Hola equipo DEV-12 se esta instalando en `staging`, en unos 10 minutos la instalación estará completada");
+  assert.equal(discordMessageForTransition("DEV-12", "Done"), "Hola equipo DEV-12 se esta instalando en `production`, en unos 10 minutos la instalación estará completada");
+  assert.equal(discordMessageForTransition("DEV-12", "In Progress"), null);
+});
+
+test("envía Discord después de una transición Jira exitosa", async () => {
+  const originalFetch = global.fetch;
+  const calls = [];
+  global.fetch = async (url, options = {}) => {
+    calls.push({ url, options });
+    if (url.includes("fields=status,summary")) {
+      return { ok: true, status: 200, json: async () => ({ fields: { status: { name: "In Progress" }, summary: "Add user management" } }) };
+    }
+    if (url.endsWith("/transitions") && options.method !== "POST") {
+      return { ok: true, status: 200, json: async () => ({ transitions: [{ id: "31", to: { name: "Waiting Test" } }] }) };
+    }
+    return { ok: true, status: 204, json: async () => null, text: async () => "" };
+  };
+  try {
+    await processTickets({ keys: ["DEV-12"], destination: "Waiting Test", requiredStatus: ["In Progress"] }, { baseUrl: "https://jira.example", user: "user", token: "token", discordWebhookUrl: "https://discord.example/webhook" }, { info() {} });
+    assert.equal(calls.at(-1).url, "https://discord.example/webhook");
+    assert.deepEqual(JSON.parse(calls.at(-1).options.body), {
+      embeds: [{
+        title: "DEV-12 - Add user management",
+        description: "Hola equipo DEV-12 se esta instalando en `staging`, en unos 10 minutos la instalación estará completada"
+      }]
+    });
   } finally {
     global.fetch = originalFetch;
   }

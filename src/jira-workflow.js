@@ -98,6 +98,42 @@ async function jiraRequest(baseUrl, auth, path, options = {}) {
 }
 
 /**
+ * Build the Spanish Discord message for the two deployment-related rules.
+ * Starting work in Jira does not send a Discord notification.
+ */
+function discordMessageForTransition(key, destination) {
+  if (destination === "Waiting Test") {
+    return `Hola equipo ${key} se esta instalando en \`staging\`, en unos 10 minutos la instalación estará completada`;
+  }
+
+  if (destination === "Done") {
+    return `Hola equipo ${key} se esta instalando en \`production\`, en unos 10 minutos la instalación estará completada`;
+  }
+
+  return null;
+}
+
+/**
+ * Send a plain-text message to a Discord webhook.
+ */
+async function sendDiscordNotification(webhookUrl, title, message) {
+  const response = await fetch(webhookUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      embeds: [{
+        title,
+        description: message
+      }]
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Discord webhook returned HTTP ${response.status}: ${await response.text()}`);
+  }
+}
+
+/**
  * Apply the selected rule independently to every detected Jira issue.
  *
  * The current status is checked before the transitions endpoint is called.
@@ -113,9 +149,10 @@ async function processTickets({ keys, destination, requiredStatus }, config, log
     const issue = await jiraRequest(
       config.baseUrl,
       auth,
-      `/rest/api/3/issue/${encodeURIComponent(key)}?fields=status`
+      `/rest/api/3/issue/${encodeURIComponent(key)}?fields=status,summary`
     );
     const current = issue.fields?.status?.name;
+    const subject = issue.fields?.summary || "";
 
     // This exact comparison is the safety boundary for every automatic change.
     if (!requiredStatus.includes(current)) {
@@ -146,6 +183,12 @@ async function processTickets({ keys, destination, requiredStatus }, config, log
       }
     );
 
+    // Notify Discord only after Jira confirms that the transition succeeded.
+    const discordMessage = discordMessageForTransition(key, destination);
+    if (discordMessage && config.discordWebhookUrl) {
+      await sendDiscordNotification(config.discordWebhookUrl, `${key} - ${subject}`, discordMessage);
+    }
+
     log.info(`${key}: ${current} -> ${destination}`);
     results.push({ key, current, destination, changed: true });
   }
@@ -153,4 +196,9 @@ async function processTickets({ keys, destination, requiredStatus }, config, log
   return results;
 }
 
-module.exports = { extractIssueKeys, eventContext, processTickets };
+module.exports = {
+  extractIssueKeys,
+  eventContext,
+  processTickets,
+  discordMessageForTransition
+};

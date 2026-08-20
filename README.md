@@ -37,6 +37,7 @@ jobs:
       jira-base-url: ${{ secrets.JIRA_BASE_URL }}
       jira-user: ${{ secrets.JIRA_USER }}
       jira-api-token: ${{ secrets.JIRA_API_TOKEN }}
+      discord-webhook-url: ${{ secrets.DISCORD_WEBHOOK_URL }}
 ```
 
 Replace `YOUR-GITHUB-OWNER` with the exact GitHub organization or personal account that owns the central `github-jira-workflows` repository. Do not keep the placeholder.
@@ -70,6 +71,23 @@ Each Jira issue is queried and evaluated independently:
 
 Any other combination is ignored. The workflow never repairs statuses, skips steps, or searches for an alternative transition path. In particular, a merge to `main` only affects issues that are already exactly in `Test Ok`.
 
+## Discord notifications
+
+After a Jira transition succeeds, the reusable workflow sends a notification to the Discord webhook configured in the consumer repository. The webhook URL must be stored as the `DISCORD_WEBHOOK_URL` secret and passed to the reusable workflow as `discord-webhook-url`.
+
+The messages are sent only for these transitions. Each Discord message uses the Jira issue subject as its title:
+
+```text
+{KEY} - {subject del tiquete}
+```
+
+For example: `DEV-12 - Add user management`.
+
+- `In Progress` -> `Waiting Test`: `Hola equipo {KEY} se esta instalando en \`staging\`, en unos 10 minutos la instalación estará completada`
+- `Test Ok` -> `Done`: `Hola equipo {KEY} se esta instalando en \`production\`, en unos 10 minutos la instalación estará completada`
+
+`{KEY}` is replaced with the Jira issue key, for example `DEV-12`. No Discord message is sent for ignored tickets or for `To Do`/`Rejected` -> `In Progress`.
+
 ## Jira configuration
 
 Configure these secrets in the consumer repository:
@@ -77,5 +95,6 @@ Configure these secrets in the consumer repository:
 - `JIRA_BASE_URL`: Jira base URL, for example `https://your-company.atlassian.net`.
 - `JIRA_USER`: Jira user email or API account.
 - `JIRA_API_TOKEN`: API token with permission to read issues and execute transitions.
+- `DISCORD_WEBHOOK_URL`: Discord webhook URL used for deployment notifications.
 
 Jira status names must match the configured names exactly, including capitalization and spaces.

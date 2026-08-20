@@ -16,6 +16,8 @@ on:
         required: true
       jira-api-token:
         required: true
+      discord-webhook-url:
+        required: true
 
 jobs:
   transition-jira:
@@ -32,6 +34,7 @@ jobs:
           JIRA_BASE_URL: ${{ secrets.jira-base-url }}
           JIRA_USER: ${{ secrets.jira-user }}
           JIRA_API_TOKEN: ${{ secrets.jira-api-token }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.discord-webhook-url }}
           STAGING_BRANCH: ${{ inputs.staging-branch }}
           MAIN_BRANCH: ${{ inputs.main-branch }}
         with:
@@ -62,5 +65,6 @@ jobs:
             await processTickets(transitionContext, {
               baseUrl: process.env.JIRA_BASE_URL,
               user: process.env.JIRA_USER,
-              token: process.env.JIRA_API_TOKEN
+              token: process.env.JIRA_API_TOKEN,
+              discordWebhookUrl: process.env.DISCORD_WEBHOOK_URL
             }, core);
