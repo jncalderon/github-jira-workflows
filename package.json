@@ -1,0 +1,9 @@
+{
+  "name": "github-jira-workflows",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Reusable GitHub Actions workflow for strict Jira transitions.",
+  "scripts": {
+    "test": "node --test"
+  }
+}
