@@ -26,6 +26,11 @@ on:
   pull_request:
     types: [closed]
 
+# The reusable workflow reads pull request commits and associated branches.
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   jira:
     if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
@@ -98,3 +103,5 @@ Configure these secrets in the consumer repository:
 - `DISCORD_WEBHOOK_URL`: Discord webhook URL used for deployment notifications.
 
 Jira status names must match the configured names exactly, including capitalization and spaces.
+
+The reusable workflow explicitly checks out `jncalderon/github-jira-workflows` because GitHub Actions checks out the caller repository by default. This is required for the central workflow to load `src/jira-workflow.js`.
